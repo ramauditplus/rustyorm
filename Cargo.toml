@@ -4,3 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+
+
+[workspace]
+members = [
+    "rustyorm_core",
+    "rustyorm_macros",
+    "demo"
+]
+
+resolver = "2"
