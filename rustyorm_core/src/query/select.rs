@@ -1,10 +1,11 @@
+use crate::query::expr::Expr;
 use crate::value::Value;
 
 #[derive(Debug)]
 pub struct Select {
     table: String,
     columns: Vec<String>,
-    conditions: Vec<String>,
+    conditions: Vec<Expr>,
     params: Vec<Value>,
 }
 
@@ -24,10 +25,10 @@ impl Select {
     }
 
     pub fn where_eq(mut self, col: impl Into<String>, value: impl Into<Value>) -> Self {
-        let idx = self.params.len() + 1;
-
-        self.conditions.push(format!("{} = ${}", col.into(), idx));
-        self.params.push(value.into());
+        self.conditions.push(Expr::Eq {
+            column: col.into(),
+            value: value.into(),
+        });
 
         self
     }
@@ -39,17 +40,45 @@ impl Select {
             self.columns.join(", ")
         };
 
-        let mut sql = format!("select {} from {}", columns, self.table);
+        let mut sql = format!("SELECT {} FROM {}", columns, self.table);
+
+        let mut params = vec![];
 
         if !self.conditions.is_empty() {
-            sql.push_str(" where ");
-            sql.push_str(&self.conditions.join(" AND "));
-        };
+            sql.push_str(" WHERE ");
+
+            let conditions = self
+                .conditions
+                .iter()
+                .map(|expr| Self::build_condition(expr, &mut params))
+                .collect::<Vec<_>>()
+                .join(" AND ");
+
+            sql.push_str(&conditions);
+        }
 
         sql
     }
 
-    pub fn params(&self) -> &[Value] {
-        &self.params
+    pub fn params(&self) -> Vec<Value> {
+        let mut params = vec![];
+
+        for expr in &self.conditions {
+            Self::build_condition(expr, &mut params);
+        }
+
+        params
+    }
+
+    fn build_condition(expr: &Expr, params: &mut Vec<Value>) -> String {
+        match expr {
+            Expr::Eq { column, value } => {
+                params.push(value.clone());
+
+                let idx = params.len();
+
+                format!("{} = ${}", column, idx)
+            }
+        }
     }
 }
